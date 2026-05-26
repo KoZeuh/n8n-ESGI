@@ -1,0 +1,188 @@
+{
+  "name": "TextToSQL",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "67cc9e8f-38cd-420f-9ea5-91fd11802ff7",
+      "name": "When chat message received",
+      "webhookId": "75952f66-42e0-458a-a6c4-b706b15debe7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "035fd3b3-f6dc-4e3b-8f35-16107f76978f",
+              "name": "chatInput",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a7da24dc-a95f-4559-b4e3-6e9f4ddfdc87",
+      "name": "SelectChatInput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert PostgreSQL SQL generator.  Your task is to generate ONLY valid PostgreSQL SELECT queries based on the provided database schema and the user's request.  STRICT RULES: - Return ONLY raw SQL - Do NOT use markdown - Do NOT explain anything - Do NOT add comments - Do NOT add backticks - Output must be a SINGLE LINE - No line breaks - No \\n characters - Only generate SELECT queries - Never generate INSERT - Never generate UPDATE - Never generate DELETE - Never generate DROP - Never generate ALTER - Never invent tables - Never invent columns - Use ONLY tables and columns present in the schema - Validate all column names before answering - Use explicit JOINs when needed - Use PostgreSQL syntax only  If the request cannot be fulfilled with the schema, return exactly: INVALID_REQUEST  DATABASE SCHEMA:  Table: categories Columns: - id integer primary key - name text unique not null  Table: products Columns: - id integer primary key - name text not null - sku text unique not null - category_id integer references categories(id) - unit_price numeric(10,2) not null - active boolean default true  Table: customers Columns: - id integer primary key - full_name text not null - email text unique not null - country text not null  Table: orders Columns: - id integer primary key - customer_id integer references customers(id) - created_at timestamp not null - status text not null  Allowed status values: - pending - paid - completed - shipped - cancelled - refunded  Table: order_items Columns: - id integer primary key - order_id integer references orders(id) - product_id integer references products(id) - quantity integer not null - unit_price numeric(10,2) not null  RELATIONSHIPS: - products.category_id = categories.id - orders.customer_id = customers.id - order_items.order_id = orders.id - order_items.product_id = products.id  IMPORTANT: - Revenue must use order_items.unit_price - Customer name column is customers.full_name - Product price column is products.unit_price - Order status column is orders.status\n- Never use FILTER()\n- Prefer CASE WHEN for conditional aggregations\n- order_items has NO status column\n- Use orders.status for payment/shipping status\n- Revenue calculation must use order_items.unit_price"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        416,
+        0
+      ],
+      "id": "68b8cf7a-3516-49c3-8af2-79810f7c5736",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "phi3:latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        416,
+        208
+      ],
+      "id": "b72b4257-76ea-4dcf-a6eb-82135f03dbb2",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "kE3OzTjlptSaeKC5",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let sql = $input.first().json.text;\n\nsql = sql\n  .replace(/```sql/gi, '')\n  .replace(/```/g, '')\n  .replace(/\\\\n/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn [\n  {\n    json: {\n      sql\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        128
+      ],
+      "id": "1306e526-f72e-4a0a-a153-5721be1e7b4d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        992,
+        128
+      ],
+      "id": "8857a286-4bff-494c-bb22-4d53e0885383",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "dNyfM0BhPxgMlb0Y",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "SelectChatInput",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SelectChatInput": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1c64e30c-2972-4dbe-a001-41b7f3e46818",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9774f57d39b2b3373aa50501f37254196d1789bd1e84490b6e4aaa5480a28ef5"
+  },
+  "id": "jRTEYfQ3Ot7Marrb",
+  "tags": []
+}
